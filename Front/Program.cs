@@ -10,12 +10,16 @@ namespace Front
 
         private int Forces;
 
-
         public Fort(int id, int initialAmountOfForces)
         {
             Id = id;
 
             Forces = initialAmountOfForces;
+        }
+
+        public int GetId()
+        {
+            return Id;
         }
 
         public int GetForces()
@@ -33,6 +37,11 @@ namespace Front
             Forces -= amount;
         }
 
+        public void DecreaseForceToOne()
+        {
+            Forces = 1;
+        }
+
         public void MoveForces()
         {
             Forces = 1;
@@ -46,6 +55,8 @@ namespace Front
         private readonly int Id;
 
         private List<Fort> Forts;
+
+        public readonly List<int> Choices = new List<int>() { 0, 0, 0 };
 
         public Faction(int id, List<Fort> initialForts)
         {
@@ -64,14 +75,18 @@ namespace Front
             Forts.Add(fort);
         }
 
-        public void RemoveFort(Fort fort)
+        public void RemoveFrontFort()
         {
-            Forts.Remove(fort);
+            Forts.Remove(Forts.Last());
         }
 
         public int MakeChoice(Fort enemyFrontFort)
         {
-            return play.Next(0, 3);
+            int choice = play.Next(0, 3);
+
+            Choices[choice]++;
+
+            return choice;
         }
 
         public Fort GetFrontFort()
@@ -109,8 +124,8 @@ namespace Front
     {
         private static readonly Random diceRoll = new Random();
 
-        private Faction RedFaction;
-        private Faction BlueFaction;
+        public Faction RedFaction;
+        public Faction BlueFaction;
 
         public Field(int initialAmountOfFortsPerFaction, int initialAmountOfForcesPerFort)
         {
@@ -121,8 +136,8 @@ namespace Front
 
             for (int fortId = 0; fortId < initialAmountOfFortsPerFaction; fortId++)
             {
-                redForts.Add(new Fort(fortId, initialAmountOfFortsPerFaction));
-                blueForts.Add(new Fort(totalAmountOfForts - fortId - 1, initialAmountOfFortsPerFaction));
+                redForts.Add(new Fort(fortId, initialAmountOfForcesPerFort));
+                blueForts.Add(new Fort(totalAmountOfForts - fortId - 1, initialAmountOfForcesPerFort));
             }
 
             RedFaction = new Faction(0, redForts);
@@ -160,7 +175,14 @@ namespace Front
             switch(choice)
             {
                 case 0:
-                    FactionAttack(factionId);
+                    if(FactionCanAttack(factionId))
+                    {
+                        FactionAttack(factionId);
+                    }
+                    else
+                    {
+                        FactionReinforcements(factionId);
+                    }
                     break;
                 case 1:
                     FactionMove(factionId);
@@ -170,20 +192,39 @@ namespace Front
                     break;
             }
         }
+        
+        private bool FactionCanAttack(int factionId)
+        {
+            if(factionId == 0)
+            {
+                return (RedFaction.GetFrontFort().GetForces() > 1);
+            }
+            else
+            {
+                return (BlueFaction.GetFrontFort().GetForces() > 1);
+            }
+        }
 
         private void FactionAttack(int factionId)
         {
             List<int> redDiceRolls = new List<int>();
             List<int> blueDiceRolls = new List<int>();
 
-            for (int force = 0; force < RedFaction.GetFrontFort().GetForces(); force++)
+            // The attacking Faction loses one force
+            int redAttackerPenalty = (1 - factionId);
+            int blueAttackerPenalty = factionId;
+
+            int redForcesLost = 0;
+            int blueForcesLost = 0;
+
+            for (int force = 0; force < (RedFaction.GetFrontFort().GetForces() - redAttackerPenalty); force++)
             {
                 var roll = diceRoll.Next(1, 7);
 
                 redDiceRolls.Add(roll);
             }
 
-            for (int force = 0; force < BlueFaction.GetFrontFort().GetForces(); force++)
+            for (int force = 0; force < (BlueFaction.GetFrontFort().GetForces() - blueAttackerPenalty); force++)
             {
                 var roll = diceRoll.Next(1, 7);
 
@@ -193,10 +234,67 @@ namespace Front
             redDiceRolls.Sort();
             blueDiceRolls.Sort();
 
-            // TODO: Cap dice amounts to the minimum Count on Lists
-            // TODO: Match dices and look winners
-            // TODO: Make Forces diminish
-            // TODO: Check for Fort change
+            int additionalRedForces = 0;
+            int additionalBlueForces = 0;
+
+            if (redDiceRolls.Count() > blueDiceRolls.Count())
+            {
+                additionalRedForces = redDiceRolls.Count() - blueDiceRolls.Count();
+            }
+            else if (blueDiceRolls.Count() > redDiceRolls.Count())
+            {
+                additionalBlueForces = blueDiceRolls.Count() - redDiceRolls.Count();
+            }
+
+            int lesserForceAmount = Math.Min(redDiceRolls.Count(), blueDiceRolls.Count());
+
+            for (int force = 0; force < lesserForceAmount; force++)
+            {
+                if (redDiceRolls[force + additionalRedForces] > blueDiceRolls[force + additionalBlueForces])
+                {
+                    blueForcesLost++;
+                }
+                else if (redDiceRolls[force + additionalRedForces] < blueDiceRolls[force + additionalBlueForces])
+                {
+                    redForcesLost++;
+                }
+            }
+
+            RedFaction.GetFrontFort().DecreaseForce(redForcesLost);
+            BlueFaction.GetFrontFort().DecreaseForce(blueForcesLost);
+
+            if(factionId == 0)
+            {
+                if (BlueFaction.GetFrontFort().GetForces() <= 0)
+                {
+                    int redForcesToFront = RedFaction.GetFrontFort().GetForces() - 1;
+                    int blueFrontFortId = BlueFaction.GetFrontFort().GetId();
+
+                    BlueFaction.RemoveFrontFort();
+
+                    Fort newRedFort = new Fort(blueFrontFortId, redForcesToFront - 1);
+
+                    RedFaction.GetFrontFort().DecreaseForceToOne();
+
+                    RedFaction.AddFort(newRedFort);
+                }
+            }
+            else
+            {
+                if (RedFaction.GetFrontFort().GetForces() <= 0)
+                {
+                    int blueForcesToFront = BlueFaction.GetFrontFort().GetForces() - 1;
+                    int redFrontFortId = RedFaction.GetFrontFort().GetId();
+
+                    RedFaction.RemoveFrontFort();
+
+                    Fort newBlueFort = new Fort(redFrontFortId, blueForcesToFront - 1);
+
+                    BlueFaction.GetFrontFort().DecreaseForceToOne();
+
+                    BlueFaction.AddFort(newBlueFort);
+                }
+            }
         }
 
         private void FactionMove(int factionId)
@@ -233,6 +331,7 @@ namespace Front
 
         static void Main(string[] args)
         {
+            int turns = 0;
             bool shouldGameContinue = true;
             int winningFaction = 0;
 
@@ -241,24 +340,29 @@ namespace Front
             Console.WriteLine("Press any key to start the Game.");
             Console.ReadKey();
             Console.WriteLine();
+            Console.WriteLine("...");
+            Console.WriteLine();
 
             Field field = new Field(initialAmountOfFortsPerFaction, initialAmountOfForcesPerFort);
 
             int firstFaction = rnd.Next(0, 2);
-            var secondFaction = 1 - firstFaction;
+            int secondFaction = 1 - firstFaction;
             List<int> factionOrder = new List<int>() { firstFaction, secondFaction };
 
             while(shouldGameContinue)
             {
                 foreach (int factionId in factionOrder)
                 {
-                    if (factionId == 0)
+                    if(shouldGameContinue)
                     {
-                        field.RedFactionPlay();
-                    }
-                    else
-                    {
-                        field.BlueFactionPlay();
+                        if (factionId == 0)
+                        {
+                            field.RedFactionPlay();
+                        }
+                        else
+                        {
+                            field.BlueFactionPlay();
+                        }
                     }
 
                     if (field.IsFactionWinner(factionId))
@@ -268,16 +372,36 @@ namespace Front
                         winningFaction = factionId;
                     }
                 }
+
+                turns++;
             }
             
             if (winningFaction == 0)
             {
-                Console.WriteLine("Red Faction is the Winner!");
+                Console.WriteLine("Red Faction is the Winner with {0} Forces on the Front!", field.RedFaction.GetFrontFort().GetForces());
             }
             else
             {
-                Console.WriteLine("Blue Faction is the Winner!");
+                Console.WriteLine("Blue Faction is the Winner with {0} Forces on the Front!", field.BlueFaction.GetFrontFort().GetForces());
             }
+
+            Console.WriteLine();
+
+            Console.WriteLine("- The game took {0} turns to end.", turns);
+            Console.WriteLine();
+            Console.WriteLine("- Red performed:");
+            Console.WriteLine("  - {0} Attacks on the Front.", field.RedFaction.Choices[0]);
+            Console.WriteLine("  - {0} Forces Movements.", field.RedFaction.Choices[1]);
+            Console.WriteLine("  - {0} Reinforcement Calls.", field.RedFaction.Choices[2]);
+            Console.WriteLine();
+            Console.WriteLine("- Blue performed:");
+            Console.WriteLine("  - {0} Attacks on the Front.", field.BlueFaction.Choices[0]);
+            Console.WriteLine("  - {0} Forces Movements.", field.BlueFaction.Choices[1]);
+            Console.WriteLine("  - {0} Reinforcement Calls.", field.BlueFaction.Choices[2]);
+
+            Console.WriteLine();
+            Console.WriteLine("Press any key to close the Game.");
+            Console.ReadKey();
         }
     }
 }
