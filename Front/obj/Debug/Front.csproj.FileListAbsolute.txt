@@ -1,0 +1,7 @@
+C:\Users\alexa\Downloads\repos\Front\Front\bin\Debug\Front.exe.config
+C:\Users\alexa\Downloads\repos\Front\Front\bin\Debug\Front.exe
+C:\Users\alexa\Downloads\repos\Front\Front\bin\Debug\Front.pdb
+C:\Users\alexa\Downloads\repos\Front\Front\obj\Debug\Front.csprojAssemblyReference.cache
+C:\Users\alexa\Downloads\repos\Front\Front\obj\Debug\Front.csproj.CoreCompileInputs.cache
+C:\Users\alexa\Downloads\repos\Front\Front\obj\Debug\Front.exe
+C:\Users\alexa\Downloads\repos\Front\Front\obj\Debug\Front.pdb
